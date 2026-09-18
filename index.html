@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SW문제해결 알고리즘 학습</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Ace Editor (코드 에디터 필수 외부 라이브러리) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.7/ace.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.7/ext-language_tools.js"></script>
+    
+    <!-- Pyodide (브라우저용 파이썬 가상머신) -->
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.24.1/full/pyodide.js"></script>
+    
+    <style>
+        /* 커스텀 스크롤바 */
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 10px; }
+        .custom-scrollbar:hover::-webkit-scrollbar-thumb { background-color: #94a3b8; }
+        
+        /* 로딩 스피너 애니메이션 */
+        .loader {
+            width: 16px; height: 16px;
+            border: 2px solid currentColor;
+            border-bottom-color: transparent;
+            border-radius: 50%;
+            display: inline-block;
+            box-sizing: border-box;
+            animation: rotation 1s linear infinite;
+        }
+        @keyframes rotation { 
+            0% { transform: rotate(0deg); } 
+            100% { transform: rotate(360deg); } 
+        }
+        
+        /* 폴더 아이콘 회전 트랜지션 */
+        .chevron { transition: transform 0.2s ease-in-out; }
+        .chevron.open { transform: rotate(90deg); }
+    </style>
+</head>
+<body class="h-screen flex flex-col overflow-hidden text-slate-800">
+
+    <header class="bg-white shadow-sm z-20 flex-shrink-0">
+        <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <!-- Mobile Sidebar Toggle Button -->
+                <button id="mobile-menu-btn" class="md:hidden p-2 rounded-lg text-slate-600 hover:bg-slate-100 focus:outline-none" aria-label="메뉴 열기">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+                </button>
+                <svg class="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path>
+                </svg>
+                <h1 class="text-lg md:text-xl font-bold text-slate-800 truncate">SW문제해결 알고리즘 학습</h1>
+            </div>
+            <div id="status-badge" class="flex items-center px-3 py-1 rounded-full bg-amber-100 text-amber-800 text-xs md:text-sm font-semibold whitespace-nowrap">
+                <span class="loader" id="loader-spinner"></span>
+                <span id="status-text">엔진 로딩 중...</span>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-1 flex overflow-hidden max-w-7xl w-full mx-auto p-2 md:p-4 gap-4 relative">
+        <!-- Sidebar: Topics (Responsive Drawer on Mobile) -->
+        <aside id="sidebar" class="fixed md:static inset-y-0 left-0 z-30 md:z-auto w-72 md:w-64 flex-shrink-0 bg-white rounded-r-xl md:rounded-xl shadow-lg md:shadow-sm border border-slate-200 flex flex-col overflow-hidden transform -translate-x-full md:translate-x-0 transition-transform duration-200 ease-in-out">
+            <div class="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                <h2 class="font-bold text-slate-700">학습 목차</h2>
+                <button id="close-sidebar-btn" class="md:hidden text-slate-400 hover:text-slate-600">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div class="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar" id="topic-list">
+                <!-- 자바스크립트로 목차 렌더링 -->
+            </div>
+        </aside>
+
+        <!-- Sidebar Backdrop for Mobile -->
+        <div id="sidebar-backdrop" class="fixed inset-0 bg-slate-900/40 z-20 hidden md:hidden"></div>
+
+        <section class="flex-1 flex flex-col min-w-0 bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+            <!-- Concept Description -->
+            <div class="p-4 md:p-5 border-b border-slate-200 bg-slate-50 overflow-y-auto max-h-40 md:max-h-48 custom-scrollbar flex-shrink-0">
+                <h2 id="concept-title" class="text-xl md:text-2xl font-bold text-slate-800 mb-2"></h2>
+                <div id="concept-desc" class="text-slate-600 leading-relaxed text-sm md:text-base"></div>
+            </div>
+
+            <!-- Editor & Terminal Layout -->
+            <div class="flex-1 flex flex-col min-h-0">
+                <!-- Editor Toolbar -->
+                <div class="px-3 md:px-4 py-2 bg-slate-800 text-slate-300 flex flex-wrap justify-between items-center text-xs md:text-sm border-b border-slate-700 gap-2 flex-shrink-0">
+                    <div class="flex items-center gap-2">
+                        <span class="font-mono text-xs bg-slate-700 text-blue-300 px-2 py-0.5 rounded">Python 3</span>
+                        <span class="text-slate-400 text-xs hidden sm:inline">(Ctrl + Enter 로 즉시 실행 / 무한루프 2초 방어 / 자동 저장)</span>
+                    </div>
+                    <div class="flex items-center gap-1.5 md:gap-2">
+                        <!-- Reset Code Button -->
+                        <button id="reset-btn" class="bg-slate-700 hover:bg-slate-600 text-slate-200 px-2.5 py-1.5 rounded transition-colors flex items-center text-xs" title="초기 예제 코드로 복원">
+                            <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                            초기화
+                        </button>
+                        <!-- Copy Code Button -->
+                        <button id="copy-btn" class="bg-slate-700 hover:bg-slate-600 text-slate-200 px-2.5 py-1.5 rounded transition-colors flex items-center text-xs" title="현재 에디터의 코드 복사">
+                            <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                            복사
+                        </button>
+                        <!-- Run Code Button -->
+                        <button id="run-btn" disabled class="bg-blue-600 hover:bg-blue-500 text-white px-3 md:px-4 py-1.5 rounded transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed flex items-center font-semibold text-xs md:text-sm">
+                            <svg class="w-3.5 h-3.5 md:w-4 md:h-4 mr-1" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"></path></svg>
+                            코드 실행
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Code Editor (Ace) - Explicit Container Height Fix -->
+                <div class="flex-1 relative min-h-[160px] w-full">
+                    <div id="editor" class="absolute inset-0 w-full h-full"></div>
+                </div>
+
+                <!-- Terminal / Output -->
+                <div class="h-44 md:h-52 bg-[#1e1e1e] border-t-2 border-slate-700 flex flex-col flex-shrink-0">
+                    <div class="px-3 md:px-4 py-1.5 bg-slate-900 text-slate-400 text-xs font-mono tracking-wider flex justify-between items-center">
+                        <div class="flex items-center gap-2">
+                            <span>TERMINAL OUTPUT</span>
+                            <span id="exec-time" class="text-[11px] text-slate-500 font-normal"></span>
+                        </div>
+                        <button id="clear-btn" class="hover:text-slate-200 transition-colors text-[11px] px-1.5 py-0.5 rounded hover:bg-slate-800">
+                            Clear
+                        </button>
+                    </div>
+                    <pre id="output" class="flex-1 p-3 md:p-4 font-mono text-xs md:text-sm text-slate-300 overflow-y-auto custom-scrollbar m-0 whitespace-pre-wrap select-text"></pre>
+                </div>
+            </div>
+        </section>
+    </main>
+<!-- ... existing code ... -->
+<!-- ... existing code ... -->
+<script>
+    // 전역 변수 초기화 (topics 배열 에러 해결을 위해 최상단에 배치)
+    let editor;
+    let pyodideInstance = null;
+    let currentTopicId = null;
+    let isExecuting = false;
+    let expandedGroups = { '1': true, '2': true, '3': true, '4': true, '5': true, '6': true };
+
+    const groupTitles = {
+        '1': 'Step 1. 배열과 기본 정렬',
+        '2': 'Step 2. 2차원 배열과 검색',
+        '3': 'Step 3. 문자열 매칭',
+        '4': 'Step 4. 스택과 탐색 응용',
+        '5': 'Step 5. 큐와 탐색 활용',
+        '6': 'Step 6. 트리와 힙'
+    };
+
+    // topics 배열이 누락되어 발생하는 ReferenceError를 완벽히 방지합니다.
+    const topics = [
+        {
+            id: 'arr_search', group: '1', title: '배열과 순차 검색',
+            desc: '배열의 데이터를 처음부터 끝까지 차례대로 비교하며 찾는 가장 기본적인 탐색 방법입니다.<br/><br/>💡 <b>파이썬 입력 꿀팁:</b><br/><code>TypeError: \'map\' object is not subscriptable</code> 에러를 방지하려면 입력받을 때 반드시 <code>list()</code>로 감싸야 합니다.<br/>예시: <code>arr = list(map(int, input().split()))</code>',
+            code: 'arr = [4, 9, 11, 23, 2, 19, 7]\ntarget = 23\n\nfor i in range(len(arr)):\n    if arr[i] == target:\n        print(f"찾았습니다! 인덱스: {i}")\n        break\nelse:\n    print("값을 찾지 못했습니다.")'
+        },
+        {
+            id: 'bubble_sort', group: '1', title: '버블 정렬 (Bubble Sort)',
+            desc: '인접한 두 원소를 비교하며 자리를 바꾸는 정렬 방식입니다. 구현이 쉽지만 시간 복잡도가 O(N^2)로 느립니다.',
+            code: 'arr = [55, 7, 78, 12, 42]\nn = len(arr)\n\nfor i in range(n - 1, 0, -1):\n    for j in range(i):\n        if arr[j] > arr[j + 1]:\n            arr[j], arr[j + 1] = arr[j + 1], arr[j]\n\nprint("버블 정렬 결과:", arr)'
+        },
+        {
+            id: 'counting_sort', group: '1', title: '카운팅 정렬 (Counting Sort)',
+            desc: '데이터의 개수를 세어 정렬하는 방식입니다. 데이터 범위가 제한적일 때 O(N)의 속도로 매우 빠릅니다.',
+            code: 'arr = [0, 4, 1, 3, 1, 2, 4, 1]\nmax_val = max(arr)\ncounts = [0] * (max_val + 1)\nsorted_arr = [0] * len(arr)\n\n# 1. 개수 세기\nfor num in arr:\n    counts[num] += 1\n\n# 2. 누적합 구하기\nfor i in range(1, len(counts)):\n    counts[i] += counts[i - 1]\n\n# 3. 정렬하기 (뒤에서부터)\nfor num in reversed(arr):\n    counts[num] -= 1\n    sorted_arr[counts[num]] = num\n\nprint("카운팅 정렬 결과:", sorted_arr)'
+        },
+        {
+            id: 'greedy', group: '1', title: '탐욕 알고리즘 (Baby-gin)',
+            desc: '매 순간 최적이라고 생각되는 것을 선택합니다.<br/>💡 <b>오답 노트:</b> 정렬(Sort)을 사용하면 <code>132132</code> 같은 케이스에서 오답이 납니다. 반드시 빈도수를 세는 <b>카운팅 배열</b>을 써야 합니다.',
+            code: 'cards = "123123"\n# replace로 공백/줄바꿈 에러를 원천 차단하고 IndexError를 막기 위해 12칸 할당\ncounts = [0] * 12\n\nfor c in cards.replace(" ", "").strip():\n    counts[int(c)] += 1\n\nbaby_gin = 0\ni = 0\nwhile i < 10:\n    # Triplet (같은 숫자 3개)\n    if counts[i] >= 3:\n        counts[i] -= 3\n        baby_gin += 1\n        continue # 동일한 숫자가 6개일 수 있으므로 다시 검사\n    \n    # Run (연속된 숫자 3개) - >= 1을 쓰는 이유는 카드가 겹쳐 있을 수 있기 때문\n    if counts[i] >= 1 and counts[i+1] >= 1 and counts[i+2] >= 1:\n        counts[i] -= 1\n        counts[i+1] -= 1\n        counts[i+2] -= 1\n        baby_gin += 1\n        continue\n    \n    i += 1\n\nif baby_gin == 2:\n    print("Baby-gin 입니다!")\nelse:\n    print("Baby-gin이 아닙니다.")'
+        },
+        {
+            id: 'reverse_search', group: '1', title: '역방향 탐색 팁',
+            desc: '배열을 앞에서부터 찾으면 O(N^2)로 시간 초과가 날 수 있지만, <b>뒤에서부터 거꾸로 순회</b>하면 O(N)으로 한 번에 끝낼 수 있는 강력한 코테 기법입니다. (예: 백만장자 프로젝트, 사다리 타기)',
+            code: 'prices = [10, 7, 6, 9, 2, 8]\nn = len(prices)\n\nmax_price = 0\nprofit = 0\n\n# 배열을 뒤에서부터(역방향) 순회\nfor i in range(n - 1, -1, -1):\n    if prices[i] > max_price:\n        max_price = prices[i] # 최댓값 갱신\n    else:\n        profit += max_price - prices[i] # 차익 실현\n\nprint("최대 이익:", profit)'
+        },
+        {
+            id: 'delta_search', group: '2', title: '델타 탐색 (2차원 상하좌우)',
+            desc: '2차원 배열에서 현재 위치를 기준으로 상, 하, 좌, 우 인접한 원소를 탐색하는 기법입니다. N=100 이하의 격자에서 완전탐색을 해도 1초 내에 거뜬히 통과합니다.',
+            code: 'arr = [[1, 2, 3],\n       [4, 5, 6],\n       [7, 8, 9]]\n\n# 상, 하, 좌, 우 델타값\ndi = [-1, 1, 0, 0]\ndj = [0, 0, -1, 1]\n\n# 기준 위치 (1, 1) -> 숫자 5\ni, j = 1, 1\nprint(f"기준 값: {arr[i][j]}")\n\nfor k in range(4):\n    ni = i + di[k]\n    nj = j + dj[k]\n    \n    # 배열 범위를 벗어나지 않는지 체크 (IndexError 방지)\n    if 0 <= ni < 3 and 0 <= nj < 3:\n        print(f"인접 값: {arr[ni][nj]}")'
+        },
+        {
+            id: 'binary_search', group: '2', title: '이진 검색 (Binary Search)',
+            desc: '정렬된 배열에서 중간값을 기준으로 범위를 반씩 줄이는 O(logN) 탐색입니다.<br/>💡 중간 인덱스를 구할 때 <code>(start + end) // 2</code> 또는 <code>int()</code>를 써야 소수점이 버려집니다.',
+            code: 'arr = [2, 4, 7, 9, 11, 19, 23] # 반드시 정렬되어 있어야 함\ntarget = 19\n\nstart = 0\nend = len(arr) - 1\n\nwhile start <= end:\n    mid = (start + end) // 2\n    \n    if arr[mid] == target:\n        print(f"찾았습니다! 인덱스: {mid}")\n        break\n    elif arr[mid] > target:\n        end = mid - 1\n    else:\n        start = mid + 1\nelse:\n    print("값을 찾지 못했습니다.")'
+        },
+        {
+            id: 'selection_sort', group: '2', title: '선택 정렬 (Selection Sort)',
+            desc: '배열에서 최솟값을 찾아 맨 앞으로 보내는 작업을 반복하는 정렬 알고리즘입니다.',
+            code: 'arr = [64, 25, 12, 22, 11]\nn = len(arr)\n\nfor i in range(n - 1):\n    min_idx = i\n    for j in range(i + 1, n):\n        if arr[j] < arr[min_idx]:\n            min_idx = j\n            \n    arr[i], arr[min_idx] = arr[min_idx], arr[i]\n\nprint("선택 정렬 결과:", arr)'
+        },
+        {
+            id: 'python_zip', group: '2', title: '2차원 배열 & Zip() 꿀팁',
+            desc: '파이썬의 <code>zip()</code> 함수와 슬라이싱을 결합하여 스도쿠 검사 등에서 복잡한 다중 for문을 획기적으로 줄이는 방법입니다.',
+            code: 'matrix = [\n    [1, 2, 3, 4],\n    [5, 6, 7, 8],\n    [9, 10, 11, 12],\n    [13, 14, 15, 16]\n]\n\nprint("--- 1. 가로 세로 동시 순회 (zip 활용) ---")\nfor row, col in zip(matrix, zip(*matrix)):\n    print(f"가로: {row} | 세로: {list(col)}")\n\nprint("\\n--- 2. 2x2 격자 슬라이싱 검사 팁 ---")\n# 리스트 덧셈 연산으로 평탄화 처리하여 2중 포문으로 줄이기\n# 스도쿠 같은 문제에서 3x3 격자 검사 시 유용합니다.\nr, c = 0, 0 # 좌상단 시작점\ngrid_2x2 = sum([matrix[i][c:c+2] for i in range(r, r+2)], [])\nprint("2x2 추출 결과:", grid_2x2)'
+        },
+        {
+            id: 'brute_force', group: '3', title: '고지식한 패턴 검색',
+            desc: '본문 문자열을 처음부터 끝까지 순회하며 패턴과 일치하는지 확인하는 직관적인 검색 알고리즘입니다.',
+            code: 'text = "This is a book"\npattern = "is"\n\nn = len(text)\nm = len(pattern)\n\nfor i in range(n - m + 1):\n    match = True\n    for j in range(m):\n        if text[i + j] != pattern[j]:\n            match = False\n            break\n    if match:\n        print(f"패턴을 인덱스 {i}에서 찾았습니다!")'
+        },
+        {
+            id: 'stack_intro', group: '4', title: '스택 (Stack) 기초',
+            desc: '나중에 들어온 데이터가 먼저 나가는 LIFO(Last-In-First-Out) 구조입니다. 파이썬에서는 기본 <code>list</code>로 구현합니다.',
+            code: 'stack = []\n\n# Push (삽입)\nstack.append(1)\nstack.append(2)\nstack.append(3)\nprint("스택 상태:", stack)\n\n# Peek (맨 위 확인)\nprint("맨 위 원소:", stack[-1])\n\n# Pop (삭제 및 반환)\nprint("꺼낸 원소:", stack.pop())\nprint("현재 스택:", stack)'
+        },
+        {
+            id: 'stack_postfix', group: '4', title: '후위 표기법 (Postfix)',
+            desc: '수식을 괄호 없이 표현하기 위해 스택을 활용하여 중위 표기식을 후위 표기식으로 변환합니다.',
+            code: 'expression = "6+5*(2-8)/2"\nstack = []\nresult = ""\n\n# 우선순위 딕셔너리\nicp = {\'*\': 2, \'/\': 2, \'+\': 1, \'-\': 1, \'(\': 3} # 넣을 때\nisp = {\'*\': 2, \'/\': 2, \'+\': 1, \'-\': 1, \'(\': 0} # 스택 안에서\n\nfor token in expression:\n    if token.isdigit():\n        result += token\n    elif token == \')\':\n        while stack and stack[-1] != \'(\':\n            result += stack.pop()\n        stack.pop()\n    else:\n        while stack and isp[stack[-1]] >= icp[token]:\n            result += stack.pop()\n        stack.append(token)\n\nwhile stack:\n    result += stack.pop()\n\nprint("후위 표기식:", result)'
+        },
+        {
+            id: 'stack_dfs', group: '4', title: '깊이 우선 탐색 (DFS)',
+            desc: '그래프나 트리에서 한 우물을 깊게 파고 내려가는 탐색 방식으로, 스택이나 재귀 함수를 사용합니다.',
+            code: 'graph = {\n    \'A\': [\'B\', \'C\'],\n    \'B\': [\'D\', \'E\'],\n    \'C\': [\'F\'],\n    \'D\': [], \'E\': [], \'F\': []\n}\n\nvisited = set()\n\ndef dfs(node):\n    visited.add(node)\n    print(node, end=" ")\n    \n    for neighbor in graph[node]:\n        if neighbor not in visited:\n            dfs(neighbor)\n\nprint("DFS 탐색 순서:")\ndfs(\'A\')'
+        },
+        {
+            id: 'backtracking', group: '4', title: '백트래킹 (Backtracking)',
+            desc: '모든 경우를 탐색하되, 유망하지 않은 경로는 미리 쳐내는(Pruning) 최적화 기법입니다.<br/>💡 코드를 <code>def</code> 함수로 묶으면 메모리 초기화가 쉬워지고 속도가 비약적으로 향상됩니다.',
+            code: 'arr = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]\ntarget_sum = 10\n\ndef find_subsets(idx, current_sum, subset):\n    # 가지치기: 이미 합이 타겟을 넘으면 더 이상 볼 필요 없음\n    if current_sum > target_sum:\n        return\n        \n    if current_sum == target_sum:\n        print("찾은 부분집합:", subset)\n        return\n        \n    if idx >= len(arr):\n        return\n        \n    # 원소를 포함하는 경우\n    find_subsets(idx + 1, current_sum + arr[idx], subset + [arr[idx]])\n    \n    # 원소를 포함하지 않는 경우\n    find_subsets(idx + 1, current_sum, subset)\n\nfind_subsets(0, 0, [])'
+        },
+        {
+            id: 'dp_fibo', group: '4', title: '동적 계획법 (DP)',
+            desc: '이미 계산된 결과를 메모리에 저장(Memoization)해두고 재사용하여 연산 속도를 비약적으로 높입니다.',
+            code: 'memo = {0: 0, 1: 1}\n\ndef fibonacci(n):\n    if n in memo:\n        return memo[n]\n        \n    memo[n] = fibonacci(n-1) + fibonacci(n-2)\n    return memo[n]\n\nprint("피보나치 10번째 수:", fibonacci(10))\nprint("피보나치 35번째 수 (순식간에 계산됨):", fibonacci(35))'
+        },
+        {
+            id: 'queue_intro', group: '5', title: '큐 (Queue) 기초',
+            desc: '먼저 들어온 데이터가 먼저 나가는 FIFO(First-In-First-Out) 구조입니다. 일반 리스트의 <code>pop(0)</code>은 매우 느리므로, 반드시 <code>collections.deque</code>를 써야 시간 초과를 막을 수 있습니다.',
+            code: 'from collections import deque\n\n# 큐 생성\nq = deque()\n\n# Enqueue (삽입)\nq.append(1)\nq.append(2)\nq.append(3)\nprint("큐 상태:", q)\n\n# Dequeue (삭제 및 반환)\nprint("꺼낸 원소:", q.popleft())\nprint("현재 큐:", q)'
+        },
+        {
+            id: 'queue_bfs', group: '5', title: '너비 우선 탐색 (BFS)',
+            desc: '시작점에서 가까운 노드부터 차례대로 탐색하는 방식으로, 물이 퍼지듯 최단 거리를 탐색할 때 큐와 함께 사용됩니다.',
+            code: 'from collections import deque\n\ngraph = {\n    1: [2, 3],\n    2: [4, 5],\n    3: [6],\n    4: [], 5: [], 6: []\n}\n\ndef bfs(start):\n    visited = [False] * 7\n    queue = deque([start])\n    visited[start] = True\n    \n    print("BFS 탐색 순서:")\n    while queue:\n        node = queue.popleft()\n        print(node, end=" ")\n        \n        for neighbor in graph[node]:\n            if not visited[neighbor]:\n                queue.append(neighbor)\n                visited[neighbor] = True\n\nbfs(1)'
+        },
+        {
+            id: 'tree_basic', group: '6', title: '트리 (Tree) 기초 표현',
+            desc: '부모 노드의 번호를 인덱스로 사용하여 자식 노드를 배열에 저장하는 기본적인 트리 구현법입니다.',
+            code: '# 정점 개수 V=5, 간선 정보 (부모 자식 순)\n# 1 2 1 3 3 4 3 5\nV = 5\nedges = [1, 2, 1, 3, 3, 4, 3, 5]\n\nleft = [0] * (V + 1)\nright = [0] * (V + 1)\n\nfor i in range(0, len(edges), 2):\n    parent, child = edges[i], edges[i+1]\n    if left[parent] == 0:\n        left[parent] = child\n    else:\n        right[parent] = child\n\nprint("부모 노드 인덱스: 0  1  2  3  4  5")\nprint("왼쪽 자식 배열:  ", left)\nprint("오른쪽 자식 배열:", right)'
+        },
+        {
+            id: 'tree_traversal', group: '6', title: '트리 순회 (Traversal)',
+            desc: '재귀를 사용하여 트리의 모든 노드를 전위(VLR), 중위(LVR), 후위(LRV) 순서로 방문합니다.',
+            code: 'left = [0, 2, 0, 4, 0, 0]\nright = [0, 3, 0, 5, 0, 0]\n\ndef preorder(node):\n    if node:\n        print(node, end=" ") # 방문 (V)\n        preorder(left[node]) # 왼쪽 (L)\n        preorder(right[node])# 오른쪽 (R)\n\ndef inorder(node):\n    if node:\n        inorder(left[node])\n        print(node, end=" ")\n        inorder(right[node])\n\ndef postorder(node):\n    if node:\n        postorder(left[node])\n        postorder(right[node])\n        print(node, end=" ")\n\nprint("전위 순회: ", end=""); preorder(1)\nprint("\\n중위 순회: ", end=""); inorder(1)\nprint("\\n후위 순회: ", end=""); postorder(1)'
+        },
+        {
+            id: 'bst_search', group: '6', title: '이진 탐색 트리 (BST)',
+            desc: '왼쪽 자식은 부모보다 작고, 오른쪽 자식은 부모보다 큰 트리를 구성하여 매우 빠른 탐색을 지원합니다.',
+            code: 'class Node:\n    def __init__(self, key):\n        self.key = key\n        self.left = None\n        self.right = None\n\ndef insert(root, key):\n    if root is None:\n        return Node(key)\n    if key < root.key:\n        root.left = insert(root.left, key)\n    else:\n        root.right = insert(root.right, key)\n    return root\n\ndef search(root, key):\n    if root is None or root.key == key:\n        return root\n    if root.key < key:\n        return search(root.right, key)\n    return search(root.left, key)\n\nroot = None\nfor num in [50, 30, 20, 40, 70, 60, 80]:\n    root = insert(root, num)\n\nresult = search(root, 40)\nif result:\n    print("트리에서 40을 찾았습니다!")'
+        },
+        {
+            id: 'heap_pq', group: '6', title: '힙 (Heap)과 우선순위 큐',
+            desc: '최솟값이나 최댓값을 매번 빠르게 찾아내야 할 때 쓰는 자료구조입니다. 파이썬 <code>heapq</code> 모듈을 사용합니다.',
+            code: 'import heapq\n\n# 파이썬의 heapq는 기본적으로 최소 힙(Min Heap)입니다.\nhq = []\nheapq.heappush(hq, 5)\nheapq.heappush(hq, 1)\nheapq.heappush(hq, 10)\n\nprint("최소 힙 상태:", hq)\nprint("가장 작은 값 꺼내기:", heapq.heappop(hq))\nprint("두 번째로 작은 값 꺼내기:", heapq.heappop(hq))\n\n# 최대 힙(Max Heap) 꿀팁: 음수로 바꿔서 넣으면 됩니다.\nmax_hq = []\nheapq.heappush(max_hq, -5)\nheapq.heappush(max_hq, -1)\nheapq.heappush(max_hq, -10)\n\nprint("\\n최대 힙 최댓값 꺼내기:", -heapq.heappop(max_hq))'
+        }
+    ];
+
+    function renderTopics() {
+        const listEl = document.getElementById('topic-list');
+        listEl.innerHTML = '';
+        
+        for (const [groupId, groupName] of Object.entries(groupTitles)) {
+            const groupBtn = document.createElement('div');
+            groupBtn.className = 'flex items-center justify-between p-2 mt-2 bg-slate-100 rounded cursor-pointer hover:bg-slate-200 transition-colors text-slate-700';
+            const isExpanded = expandedGroups[groupId];
+            
+            groupBtn.innerHTML = `
+                <span class="font-bold text-sm tracking-tight">${groupName}</span>
+                <svg class="w-4 h-4 text-slate-500 chevron ${isExpanded ? 'open' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                </svg>
+            `;
+            groupBtn.onclick = () => toggleGroup(groupId);
+            listEl.appendChild(groupBtn);
+            
+            const itemsContainer = document.createElement('div');
+            itemsContainer.id = `group-items-${groupId}`;
+            itemsContainer.className = `overflow-hidden transition-all duration-300 ${isExpanded ? 'max-h-[1000px] opacity-100 mt-1' : 'max-h-0 opacity-0'}`;
+            
+            const groupTopics = topics.filter(t => t.group === groupId);
+            groupTopics.forEach(topic => {
+                const btn = document.createElement('button');
+                btn.className = `w-full text-left px-3 py-2 text-sm rounded transition-all transform hover:translate-x-1 ${
+                    topic.id === currentTopicId 
+                    ? 'bg-blue-50 text-blue-700 font-semibold border-l-4 border-blue-600' 
+                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 border-l-4 border-transparent'
+                }`;
+                const displayName = topic.title.replace(/\[.*?\]\s*/, '');
+                btn.innerText = displayName;
+                btn.onclick = () => selectTopic(topic.id);
+                itemsContainer.appendChild(btn);
+            });
+            
+            listEl.appendChild(itemsContainer);
+        }
+    }
+
+    function toggleGroup(groupId) {
+        expandedGroups[groupId] = !expandedGroups[groupId];
+        renderTopics();
+    }
+
+    function initEditor() {
+        editor = ace.edit("editor");
+        editor.setTheme("ace/theme/monokai");
+        editor.session.setMode("ace/mode/python");
+        editor.setOptions({
+            fontSize: "14px",
+            showPrintMargin: false,
+            enableBasicAutocompletion: true,
+            enableLiveAutocompletion: true,
+            tabSize: 4,
+            useSoftTabs: true
+        });
+
+        // [기능 추가] 코드 변경 시 브라우저(로컬 스토리지)에 실시간 자동 저장
+        editor.session.on('change', function() {
+            if (currentTopicId) {
+                localStorage.setItem('algo_code_' + currentTopicId, editor.getValue());
+            }
+        });
+
+        // 윈도우 크기 변경 시 에디터 레이아웃 자동 갱신
+        window.addEventListener('resize', () => {
+            if (editor) editor.resize();
+        });
+    }
+
+    // ... existing code ...
+    function selectTopic(id) {
+        currentTopicId = id;
+        const topic = topics.find(t => t.id === id);
+        if (!topic) return;
+        
+        document.getElementById('concept-title').innerText = topic.title;
+        document.getElementById('concept-desc').innerHTML = topic.desc;
+        
+        // [기능 추가] 로컬 스토리지에 내가 수정한 코드가 있으면 불러오고, 없으면 원본 교안 코드 삽입
+        const savedCode = localStorage.getItem('algo_code_' + id);
+        editor.setValue(savedCode !== null ? savedCode : topic.code);
+        editor.clearSelection();
+        editor.gotoLine(1);
+        
+        // 아웃풋 초기화 및 실행 시간 리셋
+        document.getElementById('output').textContent = "코드를 실행하면 결과가 이곳에 표시됩니다.\n";
+        document.getElementById('exec-time').textContent = "";
+        
+        // 모바일인 경우 선택 후 사이드바 닫기
+        closeMobileSidebar();
+
+        renderTopics();
+
+        // 렌더링 후 에디터 리사이징 강제 호출
+        setTimeout(() => { if (editor) editor.resize(); }, 50);
+    }
+
+    // 모바일 사이드바 제어 함수들
+    function openMobileSidebar() {
+        const sidebar = document.getElementById('sidebar');
+        const backdrop = document.getElementById('sidebar-backdrop');
+        sidebar.classList.remove('-translate-x-full');
+        backdrop.classList.remove('hidden');
+    }
+
+    function closeMobileSidebar() {
+        const sidebar = document.getElementById('sidebar');
+        const backdrop = document.getElementById('sidebar-backdrop');
+        sidebar.classList.add('-translate-x-full');
+        backdrop.classList.add('hidden');
+    }
+
+    function setupEventListeners() {
+        // 모바일 메뉴 버튼
+        document.getElementById('mobile-menu-btn').addEventListener('click', openMobileSidebar);
+        document.getElementById('close-sidebar-btn').addEventListener('click', closeMobileSidebar);
+        document.getElementById('sidebar-backdrop').addEventListener('click', closeMobileSidebar);
+
+        // 코드 초기화(Reset) 버튼
+        document.getElementById('reset-btn').addEventListener('click', () => {
+            const topic = topics.find(t => t.id === currentTopicId);
+            if (topic && editor) {
+                // [기능 추가] 리셋 시 자동 저장된 내역도 깔끔하게 지워줌
+                localStorage.removeItem('algo_code_' + currentTopicId);
+                editor.setValue(topic.code);
+                editor.clearSelection();
+                editor.gotoLine(1);
+                const out = document.getElementById('output');
+                out.textContent = "코드가 원래 기본 예제로 초기화되었습니다.\n";
+                document.getElementById('exec-time').textContent = "";
+            }
+        });
+
+        // 코드 복사(Copy) 버튼 (iframe 제약 안전 처리)
+        document.getElementById('copy-btn').addEventListener('click', () => {
+            if (!editor) return;
+            const code = editor.getValue();
+            const textarea = document.createElement('textarea');
+            textarea.value = code;
+            textarea.style.position = 'fixed';
+            textarea.style.opacity = '0';
+            document.body.appendChild(textarea);
+            textarea.select();
+            try {
+                document.execCommand('copy');
+                const copyBtn = document.getElementById('copy-btn');
+                const originalHtml = copyBtn.innerHTML;
+                copyBtn.innerHTML = `<span class="text-emerald-400">복사됨!</span>`;
+                setTimeout(() => { copyBtn.innerHTML = originalHtml; }, 1500);
+            } catch (err) {
+                console.error("복사 실패:", err);
+            } finally {
+                document.body.removeChild(textarea);
+            }
+        });
+
+        // 터미널 클리어 버튼
+        document.getElementById('clear-btn').addEventListener('click', () => {
+            document.getElementById('output').textContent = "";
+            document.getElementById('exec-time').textContent = "";
+        });
+    }
+
+    async function loadPythonEngine() {
+        try {
+            pyodideInstance = await loadPyodide({
+                indexURL: "https://cdn.jsdelivr.net/pyodide/v0.24.1/full/"
+            });
+            
+            const badge = document.getElementById('status-badge');
+            badge.className = "flex items-center px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs md:text-sm font-semibold whitespace-nowrap";
+            document.getElementById('loader-spinner').style.display = 'none';
+            document.getElementById('status-text').innerText = "파이썬 준비 완료!";
+            
+            const runBtn = document.getElementById('run-btn');
+            runBtn.disabled = false;
+            runBtn.addEventListener('click', executePython);
+            
+            editor.commands.addCommand({
+                name: 'runCode',
+                bindKey: {win: 'Ctrl-Enter', mac: 'Command-Enter'},
+                exec: function() {
+                    executePython();
+                }
+            });
+
+        } catch (err) {
+            document.getElementById('status-text').innerText = "엔진 로딩 실패";
+            console.error("Pyodide 로딩 오류:", err);
+        }
+    }
+
+    async function executePython() {
+        if (!pyodideInstance || isExecuting) return;
+        
+        isExecuting = true;
+        const code = editor.getValue();
+        const outputEl = document.getElementById('output');
+        const execTimeEl = document.getElementById('exec-time');
+        const runBtn = document.getElementById('run-btn');
+        
+        runBtn.disabled = true;
+        runBtn.innerHTML = '<span class="loader" style="width:13px; height:13px; border-width:2px; margin-right:4px;"></span> 실행 중...';
+        outputEl.textContent = "";
+        execTimeEl.textContent = "측정 중...";
+
+        const startTime = performance.now();
+
+        try {
+            // [보안 및 안정성] 사용자 코드를 Pyodide 전역 변수로 안전하게 전달 (따옴표 에러 방지)
+            pyodideInstance.globals.set('_user_code', code);
+            
+            // [핵심 기능] 무한루프 방지(Timeout) 및 독립된 메모리 환경(exec namespace)을 제공하는 래퍼(Wrapper) 로직
+            const wrapperCode = `
+import sys
+import io
+import time
+import traceback
+
+sys.stdout = io.StringIO()
+sys.stderr = io.StringIO()
+
+class TimeoutException(Exception):
+    pass
+
+def _trace_func(frame, event, arg):
+    # 2초 초과 시 예외를 발생시켜 브라우저 먹통(무한 루프) 방지
+    if time.time() - _start_time > 2.0:
+        raise TimeoutException("⏰ 실행 시간 초과 (2초): 무한 루프가 발생했거나 연산이 너무 많습니다.")
+    return _trace_func
+
+_start_time = time.time()
+sys.settrace(_trace_func) # 코드 한 줄 실행될 때마다 시간 검사 활성화
+
+try:
+    # 딕셔너리 {} 를 넘겨주어 이전 코드의 변수가 섞이는 '변수 오염' 완전 차단
+    exec(_user_code, {})
+except TimeoutException as te:
+    sys.stderr.write(str(te) + "\\n")
+except Exception as e:
+    traceback.print_exc(file=sys.stderr)
+finally:
+    sys.settrace(None) # 코드 실행 종료 후 추적기 해제
+
+_stdout = sys.stdout.getvalue()
+_stderr = sys.stderr.getvalue()
+`;
+            
+            await pyodideInstance.runPythonAsync(wrapperCode);
+            
+            let stdout = pyodideInstance.globals.get('_stdout');
+            let stderr = pyodideInstance.globals.get('_stderr');
+            
+            const elapsed = (performance.now() - startTime).toFixed(1);
+            execTimeEl.textContent = `(실행시간: ${elapsed}ms)`;
+
+            if (stdout) outputEl.textContent += stdout;
+            if (stderr) {
+                outputEl.innerHTML += `<span class="text-rose-400">${stderr}</span>`;
+            }
+            
+            if (!stdout && !stderr) {
+                outputEl.textContent = "실행이 정상 완료되었습니다. (출력 내용 없음)";
+            }
+
+        } catch (err) {
+            const elapsed = (performance.now() - startTime).toFixed(1);
+            execTimeEl.textContent = `(오류 발생: ${elapsed}ms)`;
+            outputEl.innerHTML = `<span class="text-rose-400 font-semibold">${err.toString()}</span>`;
+        } finally {
+            isExecuting = false;
+            runBtn.disabled = false;
+            runBtn.innerHTML = '<svg class="w-3.5 h-3.5 md:w-4 md:h-4 mr-1" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"></path></svg> 코드 실행';
+        }
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+        initEditor();
+        setupEventListeners();
+        selectTopic(topics[0].id);
+        loadPythonEngine();
+    });
+</script>
+<!-- ... existing code ... -->
